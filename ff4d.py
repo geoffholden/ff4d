@@ -26,9 +26,6 @@ from stat import S_IFDIR, S_IFLNK, S_IFREG
 from fuse import FUSE, FuseOSError, Operations
 from errno import *
 
-reload(sys)
-sys.setdefaultencoding("utf-8")
-
 
 def space_usage_allocated(space_usage):
   '''Return the space usage allocation for an individual or team account as applicable.'''
@@ -97,8 +94,9 @@ class Dropbox(Operations):
         else:
           raise Exception('API Query failed')
 
-    except Exception, e:
-      if debug == True: appLog('debug', 'list folder exception: ' + str(e))
+    except Exception as e:
+      if debug:
+          appLog('debug', 'list folder exception: ' + str(e))
       return False
 
     result['path'] = path
@@ -157,7 +155,7 @@ class Dropbox(Operations):
 
     #data.update(entries)
 
-    print "#########" + data
+    print("#########" + data)
     exit(-1)
     return data
 
@@ -211,7 +209,7 @@ class Dropbox(Operations):
   # Get metadata for a file or folder from the Dropbox API or local cache.
   def getDropboxMetadata(self, path, deep=False):
     # Metadata exists within cache.
-    path_enc = path.decode("utf-8")
+    path_enc = path # .decode("utf-8")
     if path_enc in self.cache:
       if debug == True: appLog('debug', 'Found cached metadata for: ' + path_enc)
       item = self.cache[path_enc]
@@ -221,10 +219,10 @@ class Dropbox(Operations):
         # Set temporary hash value for directory non-deep cache entry.
         if debug == True: appLog('debug', 'Metadata directory deepcheck: ' + str(deep))
         if debug == True: appLog('debug', 'Cache expired for: ' + path_enc)
-	if 'cachets' in item:
-	    cachets = item['cachets']
-	else:
-	    cachets = None
+        if 'cachets' in item:
+            cachets = item['cachets']
+        else:
+            cachets = None
         if debug == True: appLog('debug', 'cachets: ' + str(cachets) + ' - ' + str(int(time())))
         if debug == True: appLog('debug', 'Checking for changes on the remote endpoint for folder: ' + path_enc)
         try:
@@ -251,8 +249,9 @@ class Dropbox(Operations):
               if 'is_deleted' not in tmp or ('is_deleted' in tmp and tmp['is_deleted'] == False):
                 tmp.update({'cachets':cachets})
                 self.cache[tmp['path']] = tmp
-        except Exception, e:
-          if debug == True: appLog('debug', 'No remote changes detected for folder: ' + path, traceback.format_exc())
+        except Exception as e:
+          if debug:
+              appLog('debug', 'No remote changes detected for folder: ' + path, traceback.format_exc())
       return item
     # No cached data found, do an Dropbox API request to fetch the metadata.
     else:
@@ -269,7 +268,7 @@ class Dropbox(Operations):
           return False
         if debug_raw == True: appLog('debug', 'Data from Dropbox API call: metadata(' + path + ')')
         if debug_raw == True: appLog('debug', str(item))
-      except Exception, e:
+      except Exception as e:
         if str(e) == 'apiRequest failed. HTTPError: 404':
           return False
         else:
@@ -291,11 +290,11 @@ class Dropbox(Operations):
   # Filesystem functions. #
   #########################
   def mkdir(self, path, mode):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: mkdir() - Path: ' + path)
     try:
       self.dbxFileCreateFolder(path)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not create folder: ' + path, traceback.format_exc())
       raise FuseOSError(EIO)
 
@@ -305,11 +304,11 @@ class Dropbox(Operations):
 
   # Remove a directory.
   def rmdir(self, path):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: rmdir() - Path: ' + path)
     try:
       self.dbxFileDelete(path)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not delete folder: ' + path, traceback.format_exc())
       raise FuseOSError(EIO)
     if debug == True: appLog('debug', 'Successfully deleted folder: ' + path)
@@ -321,7 +320,7 @@ class Dropbox(Operations):
 
   # Remove a file.
   def unlink(self, path):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: unlink() - Path: ' + path)
 
     # Remove data from cache.
@@ -330,7 +329,7 @@ class Dropbox(Operations):
     # Delete file.
     try:
       self.dbxFileDelete(path)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not delete file: ' + path, traceback.format_exc())
       raise FuseOSError(EIO)
     if debug == True: appLog('debug', 'Successfully deleted file: ' + path)
@@ -344,7 +343,7 @@ class Dropbox(Operations):
     if debug == True: appLog('debug', 'Called: rename() - Old: ' + old + ' New: ' + new)
     try:
       self.dbxFileMove(old, new)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not rename object: ' + old, traceback.format_exc())
       raise FuseOSError(EIO)
     if debug == True: appLog('debug', 'Successfully renamed object: ' + old)
@@ -356,7 +355,7 @@ class Dropbox(Operations):
 
   # Read data from a remote filehandle.
   def read(self, path, length, offset, fh):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     # Wait while this function is not threadable.
     while self.openfh[fh]['lock'] == True:
       pass
@@ -368,7 +367,7 @@ class Dropbox(Operations):
       if self.openfh[fh]['f'] == False:
         try:
           self.openfh[fh]['f'] = self.dbxFilehandle(path, offset)
-        except Exception, e:
+        except Exception as e:
           appLog('error', 'Could not open remote file: ' + path, traceback.format_exc())
           raise FuseOSError(EIO)
       else:
@@ -383,7 +382,7 @@ class Dropbox(Operations):
     if debug == True: appLog('debug', 'File handler: ' + str(self.openfh[fh]['f']))
     try:
       rbytes = self.openfh[fh]['f'].read(length)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not read data from remotefile: ' + path, traceback.format_exc())
       raise FuseOSError(EIO)
 
@@ -395,7 +394,7 @@ class Dropbox(Operations):
 
   # Write data to a filehandle.
   def write(self, path, buf, offset, fh):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: write() - Path: ' + path + ' Offset: ' + str(offset) + ' FH: ' + str(fh))
     try:
       # Check for the beginning of the file.
@@ -423,13 +422,13 @@ class Dropbox(Operations):
           return len(buf)
       else:
         raise FuseOSError(EIO)
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not write to remote file: ' + path, traceback.format_exc())
       raise FuseOSError(EIO)
 
   # Open a filehandle.
   def open(self, path, flags):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: open() - Path: ' + path + ' Flags: ' + str(flags))
 
     # Validate flags.
@@ -443,7 +442,7 @@ class Dropbox(Operations):
 
   # Create a file.
   def create(self, path, mode):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: create() - Path: ' + path + ' Mode: ' + str(mode))
 
     fh = self.getFH('w')
@@ -457,7 +456,7 @@ class Dropbox(Operations):
 
   # Release (close) a filehandle.
   def release(self, path, fh):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: release() - Path: ' + path + ' FH: ' + str(fh))
 
     # Check to finish Dropbox upload.
@@ -480,13 +479,13 @@ class Dropbox(Operations):
 
   # Truncate a file to overwrite it.
   def truncate(self, path, length, fh=None):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: truncate() - Path: ' + path + " Size: " + str(length))
     return 0
 
   # List the content of a directory.
   def readdir(self, path, fh):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: readdir() - Path: ' + path)
 
     # Fetch folder informations.
@@ -505,7 +504,7 @@ class Dropbox(Operations):
 
   # Get properties for a directory or file.
   def getattr(self, path, fh=None):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: getattr() - Path: ' + path)
 
     # Get userid and groupid for current user.
@@ -535,7 +534,7 @@ class Dropbox(Operations):
     if 'entries' in item or item['.tag'] == 'folder':
       # Get st_nlink count for directory.
       properties = dict(
-        st_mode=S_IFDIR | 0755,
+        st_mode=S_IFDIR | 0o755,
         st_size=0,
         st_ctime=modified,
         st_mtime=modified,
@@ -548,7 +547,7 @@ class Dropbox(Operations):
       return properties
     elif item['.tag'] == 'file':
       properties = dict(
-        st_mode=S_IFREG | 0644,
+        st_mode=S_IFREG | 0o644,
         st_size=item['size'],
         st_ctime=modified,
         st_mtime=modified,
@@ -562,7 +561,7 @@ class Dropbox(Operations):
 
   # Flush filesystem cache. Always true in this case.
   def fsync(self, path, fdatasync, fh):
-    path = path.encode('utf-8')
+    path_enc = path.encode('utf-8')
     if debug == True: appLog('debug', 'Called: fsync() - Path: ' + path)
 
   # Change attributes of item. Dummy until now.
@@ -595,7 +594,8 @@ class Dropbox(Operations):
         'f_bavail':free_space/1024,
         'f_namemax':255
         };
-    except Exception, e:
+    except Exception as e:
+      appLog('error', 'statfs failed:'+repr(e))
       pass
 
     return result
@@ -609,7 +609,7 @@ def appLog(mode, text, reason=""):
   msg = "[" + mode.upper() + "] " + text
   if reason != "":
     msg = msg + " (" + reason + ")"
-  print msg
+  print(msg)
 
 ##############
 # Main entry #
@@ -625,15 +625,15 @@ debug = False
 debug_raw = False
 debug_fuse = False
 if __name__ == '__main__':
-  print '********************************************************'
-  print '* FUSE Filesystem 4 Dropbox                            *'
-  print '*                                                      *'
-  print '* Copyright 2014-2018                                  *'
-  print '* Sascha Schmidt <sascha@schmidt.ps>                   *'
-  print '*                                                      *'
-  print '* https://github.com/realriot/ff4d/blob/master/LICENSE *'
-  print '********************************************************'
-  print ''
+  print('********************************************************')
+  print('* FUSE Filesystem 4 Dropbox                            *')
+  print('*                                                      *')
+  print('* Copyright 2014-2018                                  *')
+  print('* Sascha Schmidt <sascha@schmidt.ps>                   *')
+  print('*                                                      *')
+  print('* https://github.com/realriot/ff4d/blob/master/LICENSE *')
+  print('********************************************************')
+  print('')
 
   parser = argparse.ArgumentParser()
   parser.add_argument('-d', '--debug', help='Show debug output', action='store_true', default=False)
@@ -683,7 +683,7 @@ if __name__ == '__main__':
     f = open(scriptpath + '/ff4d.config', 'r')
     access_token = f.readline()
     if debug == True: appLog('debug', 'Got accesstoken from configuration file: ' + str(access_token))
-  except Exception, e:
+  except Exception as e:
     pass
 
   # Check wether the user gave an Dropbox access_token as argument.
@@ -710,7 +710,7 @@ if __name__ == '__main__':
   except dropbox.exceptions.AuthError as err:
     appLog('error', 'Failed to authorize against dropbox API.', traceback.format_exc())
     exit(-1)
-  except Exception, e:
+  except Exception as e:
     appLog('error', 'Unknown error.', traceback.format_exc())
     exit(-1)
 
@@ -721,23 +721,23 @@ if __name__ == '__main__':
       f = open(scriptpath + '/ff4d.config', 'w')
       f.write(access_token)
       f.close()
-      os.chmod(scriptpath + '/ff4d.config', 0600)
+      os.chmod(scriptpath + '/ff4d.config', 0o600)
       if debug == True: appLog('debug', 'Wrote accesstoken to configuration file.\n')
-    except Exception, e:
+    except Exception as e:
       appLog('error', 'Could not write configuration file.', traceback.format_exc())
 
   # Everything went fine and we're authed against the Dropbox api.
 
 
 
-  print "Welcome " + account_info.name.display_name
-  print "Space used: " + str(space_usage.used/1024/1024/1024) + " GB"
-  print "Space available: " + str(space_usage_allocated(space_usage)/1024/1024/1024) + " GB"
-  print
-  print "Starting FUSE..."
+  print("Welcome " + account_info.name.display_name)
+  print("Space used: " + str(space_usage.used/1024/1024/1024) + " GB")
+  print("Space available: " + str(space_usage_allocated(space_usage)/1024/1024/1024) + " GB")
+  print("")
+  print("Starting FUSE...")
 
   try:
     FUSE(Dropbox(dbx), mountpoint, foreground=args.background, debug=debug_fuse, sync_read=True, allow_other=allow_other, allow_root=allow_root)
-  except Exception, e:
+  except Exception as e:
     appLog('error', 'Failed to start FUSE...', traceback.format_exc())
     sys.exit(-1)

@@ -28,25 +28,7 @@ from stat import S_IFDIR
 from traceback import print_exc
 
 
-try:
-    from functools import partial
-except ImportError:
-    # http://docs.python.org/library/functools.html#functools.partial
-    def partial(func, *args, **keywords):
-        def newfunc(*fargs, **fkeywords):
-            newkeywords = keywords.copy()
-            newkeywords.update(fkeywords)
-            return func(*(args + fargs), **newkeywords)
-
-        newfunc.func = func
-        newfunc.args = args
-        newfunc.keywords = keywords
-        return newfunc
-
-try:
-    basestring
-except NameError:
-    basestring = str
+from functools import partial
 
 log = logging.getLogger("fuse")
 _system = system()
@@ -960,7 +942,7 @@ class FUSE(object):
         for item in self.operations('readdir', self._decode_optional_path(path),
                                                fip.contents.fh):
 
-            if isinstance(item, basestring):
+            if isinstance(item, str):
                 name, st, offset = item, None, 0
             else:
                 name, attrs, offset = item
