@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 # Copyright (c) 2014-2018 Sascha Schmidt <sascha@schmidt.ps> (author)
-# https://schmidt.ps
+# Copyright (c) 2024 Matthias Urlichs <matthias@urlichs.de>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -679,16 +679,6 @@ debug = False
 debug_raw = False
 debug_fuse = False
 if __name__ == '__main__':
-    print('********************************************************')
-    print('* FUSE Filesystem 4 Dropbox                                                        *')
-    print('*                                                                                                            *')
-    print('* Copyright 2014-2018                                                                    *')
-    print('* Sascha Schmidt <sascha@schmidt.ps>                                     *')
-    print('*                                                                                                            *')
-    print('* https://github.com/realriot/ff4d/blob/master/LICENSE *')
-    print('********************************************************')
-    print('')
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', '--debug', help='Show debug output', action='store_true', default=False)
     parser.add_argument('-dr', '--debug-raw', help='Show raw debug output', action='store_true', default=False)
