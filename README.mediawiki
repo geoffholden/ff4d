@@ -1,3 +1,15 @@
+== Fork ==
+
+This library has been forked and modernized for Python 3.
+
+=== TODO ===
+
+Use aiofuse instead of futzing with threads.
+
+Use real locking instead of busy-waiting.
+
+== Original README ==
+
 '''FUSE Filesystem 4 Dropbox''' is a FUSE plugin whichs allows a local mount of your
 global Dropbox or jailed application folder.
 
