@@ -25,6 +25,8 @@ from datetime import datetime
 from stat import S_IFDIR, S_IFLNK, S_IFREG
 from fuse import FUSE, FuseOSError, Operations
 from errno import *
+import requests
+from requests.auth import HTTPBasicAuth
 
 
 def space_usage_allocated(space_usage):
@@ -135,7 +137,7 @@ class Dropbox(Operations):
     def dbxCommitChunkedUpload(self, path, upload_id, offset):
         cursor = dropbox.files.UploadSessionCursor(upload_id, offset)
         commitinfo = dropbox.files.CommitInfo(path)
-        result = dbx.files_upload_session_finish("", cursor, commitinfo)
+        result = dbx.files_upload_session_finish(bytes(), cursor, commitinfo)
         result = self.dbxStruct(result)
 
         if debug:
@@ -279,7 +281,7 @@ class Dropbox(Operations):
                     return False
 
                 item = self.dbxMetadata(path)
-                if not item.get('is_deleted' , False):
+                if not item or item.get('is_deleted', False):
                     return False
                 if debug_raw:
                     appLog('debug', 'Data from Dropbox API call: metadata(' + path + ')')
@@ -669,7 +671,6 @@ def appLog(mode, text, reason=""):
 # Main entry #
 ##############
 # Global variables.
-access_token = False
 cache_time = 120 # Seconds
 write_cache = 4194304 # Bytes
 use_cache = False
@@ -684,10 +685,10 @@ if __name__ == '__main__':
     parser.add_argument('-dr', '--debug-raw', help='Show raw debug output', action='store_true', default=False)
     parser.add_argument('-df', '--debug-fuse', help='Show FUSE debug output', action='store_true', default=False)
 
-    # Mutual exclusion of arguments.
-    atgroup = parser.add_mutually_exclusive_group()
-    atgroup.add_argument('-ap', '--access-token-perm', help='Use this access token permanently (will be saved)', default=False)
-    atgroup.add_argument('-at', '--access-token-temp', help='Use this access token only temporarily (will not be saved)', default=False)
+    # New authentication
+    parser.add_argument('-ak', '--app-key', help='Dropbox Application Key', default=False)
+    parser.add_argument('-as', '--app-secret', help='Dropbox Application Secret', default=False)
+    parser.add_argument('-ac', '--authentication-code', help='Dropbox Authentication Code', default=False)
 
     parser.add_argument('-ao', '--allow-other', help='Allow other users to access this FUSE filesystem', action='store_true', default=False)
     parser.add_argument('-ar', '--allow-root', help='Allow root to access this FUSE filesystem', action='store_true', default=False)
@@ -722,32 +723,49 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     # Check for an existing configuration file.
+    tokens = {}
     try:
         scriptpath = os.path.dirname(os.path.abspath(__file__))
-        f = open(scriptpath + '/ff4d.config', 'r')
-        access_token = f.readline()
+        f = open(scriptpath + '/ff4d.config.json', 'r')
+        tokens = json.load(f)
         if debug:
-            appLog('debug', 'Got accesstoken from configuration file: ' + str(access_token))
+            appLog('debug', 'Got tokens from configuration file: ' + tokens)
     except Exception as e:
         pass
 
-    # Check wether the user gave an Dropbox access_token as argument.
-    if args.access_token_perm != False:
-        if debug:
-            appLog('debug', 'Got permanent accesstoken from command line: ' + args.access_token_perm)
-        access_token = args.access_token_perm
-    if args.access_token_temp:
-        if debug:
-            appLog('debug', 'Got temporary accesstoken from command line: ' + args.access_token_temp)
-        access_token = args.access_token_temp
+    # Check if new credentials were given as arguments
+    refresh_token = False
+    if any([args.app_key, args.app_secret, args.authentication_code]):
+        if not all([args.app_key, args.app_secret, args.authentication_code]):
+            appLog('error', 'All of app-key, app-secret, and authentication-code are required')
+            exit(-1)
 
-    # Check wether an access_token exists.
-    if not access_token:
-        appLog('error', 'No valid accesstoken available. Exiting.')
-        sys.exit(-1)
+        resp = requests.post(
+            'https://api.dropbox.com/oauth2/token',
+            auth=HTTPBasicAuth(args.app_key, args.app_secret),
+            data={
+                'grant_type': 'authorization_code',
+                'code': args.authentication_code
+            }
+        )
+        refresh_token = resp.json().get('refresh_token')
 
-    # Validate access_token.
-    dbx = dropbox.Dropbox(access_token)
+        if not refresh_token:
+            appLog('error', 'Error getting refresh token: ' + resp.content.decode())
+            exit(-1)
+        
+        tokens = {
+            'app_key': args.app_key,
+            'app_secret': args.app_secret,
+            'refresh_token': refresh_token,
+        }
+
+    # Validate tokens
+    dbx = dropbox.Dropbox(
+        app_key=tokens['app_key'],
+        app_secret=tokens['app_secret'],
+        oauth2_refresh_token=tokens['refresh_token']
+    )
     account_info = ''
 
     try:
@@ -762,17 +780,16 @@ if __name__ == '__main__':
         exit(-1)
 
     # Save valid access token to configuration file.
-    if not args.access_token_temp:
-        try:
-            scriptpath = os.path.dirname(os.path.abspath(__file__))
-            f = open(scriptpath + '/ff4d.config', 'w')
-            f.write(access_token)
-            f.close()
-            os.chmod(scriptpath + '/ff4d.config', 0o600)
-            if debug:
-                appLog('debug', 'Wrote accesstoken to configuration file.\n')
-        except Exception as e:
-            appLog('error', 'Could not write configuration file.', traceback.format_exc())
+    try:
+        scriptpath = os.path.dirname(os.path.abspath(__file__))
+        f = open(scriptpath + '/ff4d.config.json', 'w')
+        json.dump(tokens, f)
+        f.close()
+        os.chmod(scriptpath + '/ff4d.config.json', 0o600)
+        if debug:
+            appLog('debug', 'Wrote tokens to configuration file.\n')
+    except Exception as e:
+        appLog('error', 'Could not write configuration file.', traceback.format_exc())
 
     # Everything went fine and we're authed against the Dropbox api.
 
